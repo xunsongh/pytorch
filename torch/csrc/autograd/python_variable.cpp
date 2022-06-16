@@ -616,6 +616,7 @@ static PyObject* THPVariable_make_subclass(
     throw torch::TypeError(
         "cls must be a type (got %s)", Py_TYPE(cls)->tp_name);
   }
+  DisableTorchDispatch td_g;
   auto data =
       r.tensor(1).detach(); // creates a fresh Tensor (DEFINITELY_UNINITIALIZED)
   // We set `data`'s `allow_tensor_metadata_change` to true here, because we
