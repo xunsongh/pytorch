@@ -83,7 +83,7 @@ def _rebuild_from_type_v2(func, new_type, args, state):
 # otherwise, it will not show up in autocomplete.
 class Tensor(torch._C._TensorBase):
     def __deepcopy__(self, memo):
-        if has_torch_function_unary(self):
+        if has_torch_function_unary(self) or _C._get_torch_function_mode():
             return handle_torch_function(Tensor.__deepcopy__, (self,), self, memo)
         if not self.is_leaf:
             raise RuntimeError("Only Tensors created explicitly by the user "
@@ -96,6 +96,7 @@ class Tensor(torch._C._TensorBase):
             # doesn't work because of
             # https://github.com/pytorch/pytorch/issues/47442
             # Update the test in test_serialization if you remove 'meta' from here
+
             if self.is_sparse or self.device.type in ['lazy', 'xla', 'mps', 'ort', 'meta', 'hpu'] or \
                     (type(self) is not Tensor and self.data_ptr() == 0):
                 new_tensor = self.clone()
