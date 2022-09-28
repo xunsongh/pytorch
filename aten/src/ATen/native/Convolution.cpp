@@ -1086,7 +1086,9 @@ ConvBackend select_conv_backend(
   // This is only done for backends that don't natively support 1d spatial input.
   if (k == 3 && !input.is_mkldnn() && !input.is_xpu()) {
     // avoid accidentally going through NHWC for permuted 3d input.
-    input = input.contiguous();
+    if (!input.is_xpu()) {
+      input = input.contiguous();
+    }
     params.view1d_as_2d();
     input = view4d(input);
     weight = view4d(weight);

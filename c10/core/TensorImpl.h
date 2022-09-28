@@ -2102,6 +2102,12 @@ struct C10_API TensorImpl : public c10::intrusive_ptr_target {
         }
         break;
       }
+      case MemoryFormat::ChannelsLast1d: {
+        TORCH_CHECK(
+            dim() == 3, "required rank 3 tensor to use channels_last format");
+        set_sizes_and_strides(sizes(), get_channels_last_strides_1d(sizes()));
+        break;
+      }
       case MemoryFormat::ChannelsLast: {
         TORCH_CHECK(
             dim() == 4, "required rank 4 tensor to use channels_last format");
@@ -2126,6 +2132,10 @@ struct C10_API TensorImpl : public c10::intrusive_ptr_target {
     // recompute contiguous flag, as currently NHWC/NCHW flags are not mutually
     // exclusive see #24090
     refresh_contiguous();
+  }
+
+  bool is_strides_like_channels_last_1d() const {
+    return compute_strides_like_channels_last_1d();
   }
 
   bool is_strides_like_channels_last() const {
@@ -2247,9 +2257,13 @@ struct C10_API TensorImpl : public c10::intrusive_ptr_target {
    */
   bool compute_contiguous() const;
 
+  bool compute_channels_last_contiguous_1d() const;
+
   bool compute_channels_last_contiguous_2d() const;
 
   bool compute_channels_last_contiguous_3d() const;
+
+  bool compute_strides_like_channels_last_1d() const;
 
   bool compute_strides_like_channels_last_2d() const;
 
@@ -2291,10 +2305,10 @@ struct C10_API TensorImpl : public c10::intrusive_ptr_target {
 
     is_contiguous_ = compute_contiguous();
     // Note:
-    // Dim 0, 1, 2 will never be a channels last 2d/3d format
-    // Dim 3+ is possibly be a channels last 2d format (Dim 4 only at this
-    // point) Dim 4+ is possibly be a channels last 3d format (Dim 5 only at
-    // this point)
+    // Dim 0, 1, 2  will never be a channels last 2d/3d format
+    // Dim 3+ is possibly be a channels last 2d format (Dim 4 only at
+    // this point) Dim 4+ is possibly be a channels last 3d format (Dim 5 only
+    // at this point)
     switch (dim()) {
       case 4:
         is_channels_last_contiguous_ = compute_channels_last_contiguous_2d();
@@ -2319,11 +2333,11 @@ struct C10_API TensorImpl : public c10::intrusive_ptr_target {
       default:
         is_channels_last_contiguous_ = false;
         is_channels_last_3d_contiguous_ = false;
-        // is_channels_last_ and is_channels_last_3d_ are suggested
-        // memory_format. Being channels_last_contiguous doesn't necessarily
-        // mean the tensor is strided like channels_last: for strides on channel
-        // dimension could suggest desired memory_layout, but it doesn't affect
-        // memory storage
+        // is_channels_last_ and is_channels_last_3d_ are
+        // suggested memory_format. memory_format. Being
+        // channels_last_contiguous doesn't necessarily mean the tensor is
+        // strided like channels_last: for strides on channel dimension could
+        // suggest desired memory_layout, but it doesn't affect memory storage
         is_channels_last_ = false;
         is_channels_last_3d_ = false;
         is_non_overlapping_and_dense_ =

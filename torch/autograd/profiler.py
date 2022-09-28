@@ -141,6 +141,7 @@ class profile(object):
             self,
             enabled=True,
             *,
+            use_xpu=False,
             use_cuda=False,
             record_shapes=False,
             with_flops=False,
@@ -153,6 +154,7 @@ class profile(object):
         self.enabled: bool = enabled
         if not self.enabled:
             return
+        self.use_xpu = use_xpu
         self.use_cuda = use_cuda
         self.function_events: Optional[EventList] = None
         self.entered = False
@@ -172,6 +174,15 @@ class profile(object):
             assert use_kineto, \
                 "Device-only events supported only with Kineto (use_kineto=True)"
 
+        if self.use_xpu:
+            try:
+                if not torch.xpu.is_available():
+                    warn("XPU is not available, disabling XPU profiling")
+                    self.use_xpu = False
+            except AttributeError:
+                warn("XPU is not available, disabling XPU profiling")
+                self.use_xpu = False
+
         if self.use_cuda and not torch.cuda.is_available():
             warn("CUDA is not available, disabling CUDA profiling")
             self.use_cuda = False
@@ -181,6 +192,13 @@ class profile(object):
             self.kineto_activities.add(ProfilerActivity.CPU)
 
         self.profiler_kind = ProfilerState.KINETO
+        if self.use_xpu:
+            if (not use_kineto or ProfilerActivity.XPU not in
+                    _supported_activities()):
+                assert self.use_cpu, "Legacy XPU profiling requires use_cpu=True"
+                self.profiler_kind = ProfilerState.KINETO_GPU_FALLBACK
+            else:
+                self.kineto_activities.add(ProfilerActivity.XPU)
         if self.use_cuda:
             if (not use_kineto or ProfilerActivity.CUDA not in
                     _supported_activities()):
@@ -223,12 +241,15 @@ class profile(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.enabled:
             return
+        if self.use_xpu:
+            torch.xpu.synchronize()     # type: ignore
         if self.use_cuda:
             torch.cuda.synchronize()
         self.kineto_results = _disable_profiler()
         parsed_results = self._parse_kineto_results(self.kineto_results)
         self.function_events = EventList(
             parsed_results,
+            use_xpu=self.use_xpu,
             use_cuda=self.use_cuda,
             profile_memory=self.profile_memory,
             with_flops=self.with_flops)
@@ -294,6 +315,9 @@ class profile(object):
         return self.function_events.self_cpu_time_total
 
     def _parse_kineto_results(self, result):
+        # TODO:
+        # need to add parsing for xpu time
+
         # result.events() has most of the events - PyTorch op-level and device-level events
 
         trace_start_us = result.trace_start_us()
@@ -305,6 +329,11 @@ class profile(object):
             return mem_record.nbytes() if \
                 mem_record.device_type() in [DeviceType.CPU, DeviceType.MKLDNN, DeviceType.IDEEP] \
                 else 0
+        
+        def _xpu_memory_usage(mem_record):
+            return mem_record.nbytes() if \
+                mem_record.device_type() in [DeviceType.XPU] \
+                else 0
 
         def _cuda_memory_usage(mem_record):
             return mem_record.nbytes() if \
@@ -313,6 +342,7 @@ class profile(object):
 
         # Create and return FunctionEvent list
         function_events = []
+        xpu_corr_map: Dict[int, List[FunctionEvent]] - {}
         cuda_corr_map: Dict[int, List[FunctionEvent]] = {}
         max_evt_id = 0
         for kineto_event in result.events():
@@ -323,11 +353,13 @@ class profile(object):
             abs_end_us = kineto_event.start_us() + kineto_event.duration_us()
 
             cpu_memory_usage = 0
+            xpu_memory_usage = 0
             cuda_memory_usage = 0
             if kineto_event.device_type() == DeviceType.CPU:
                 # find the corresponding memory allocation events
                 for mem_record in mem_records_acc.in_interval(kineto_event.start_us(), abs_end_us):
                     cpu_memory_usage += _cpu_memory_usage(mem_record[0])
+                    xpu_memory_usage += _xpu_memory_usage(mem_record[0])
                     cuda_memory_usage += _cuda_memory_usage(mem_record[0])
                     mem_record[1] = True
 
@@ -347,6 +379,7 @@ class profile(object):
                 stack=[entry for entry in kineto_event.stack() if _filter_stack_entry(entry)],
                 scope=kineto_event.scope(),
                 cpu_memory_usage=cpu_memory_usage,
+                xpu_memory_usage=xpu_memory_usage,
                 cuda_memory_usage=cuda_memory_usage,
                 is_async=is_async,
                 sequence_nr=kineto_event.sequence_nr(),
@@ -402,6 +435,7 @@ class profile(object):
                 stack=[],
                 scope=0,  # RecordScope::FUNCTION
                 cpu_memory_usage=_cpu_memory_usage(evt),
+                xpu_memory_usage=_xpu_memory_usage(evt),
                 cuda_memory_usage=_cuda_memory_usage(evt),
                 is_async=False,
                 sequence_nr=-1,

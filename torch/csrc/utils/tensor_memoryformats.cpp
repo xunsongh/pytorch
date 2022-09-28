@@ -42,6 +42,7 @@ void initializeMemoryFormats() {
 
   add_memory_format(at::MemoryFormat::Preserve, "preserve_format");
   add_memory_format(at::MemoryFormat::Contiguous, "contiguous_format");
+  add_memory_format(at::MemoryFormat::ChannelsLast1d, "channels_last_1d");
   add_memory_format(at::MemoryFormat::ChannelsLast, "channels_last");
   add_memory_format(at::MemoryFormat::ChannelsLast3d, "channels_last_3d");
 }

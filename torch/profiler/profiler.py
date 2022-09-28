@@ -94,6 +94,7 @@ class _KinetoProfile(object):
     def prepare_trace(self):
         self.profiler = prof.profile(
             use_cuda=(ProfilerActivity.CUDA in self.activities),
+            use_xpu=(ProfilerActivity.XPU in self.activities),
             use_cpu=(ProfilerActivity.CPU in self.activities),
             record_shapes=self.record_shapes,
             with_flops=self.with_flops,

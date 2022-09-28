@@ -247,6 +247,34 @@ bool TensorImpl::compute_contiguous() const {
   return is_contiguous;
 }
 
+bool TensorImpl::compute_channels_last_contiguous_1d() const {
+  // Please don't combine these code, constant array is used here to let
+  // compiler fully unroll the loop to get better performance
+  switch (sizes_and_strides_.size()) {
+    case 3: {
+      int64_t expected = 1;
+      for (auto& d : {1, 2, 0}) {
+        const auto size_d =
+            sizes_and_strides_.size_at_unchecked(d).as_int_unchecked();
+        ;
+        if (size_d != 1) {
+          if (sizes_and_strides_.stride_at_unchecked(d) != expected) {
+            return false;
+          }
+          expected *= size_d;
+        }
+      }
+      return true;
+    }
+    // NOLINTNEXTLINE(bugprone-branch-clone)
+    case 2:
+      // TODO dim == 2 case will be enabled once it is fully tested
+      return false;
+    default:
+      return false;
+  }
+}
+
 bool TensorImpl::compute_channels_last_contiguous_2d() const {
   // Please don't combine these code, constant array is used here to let
   // compiler fully unroll the loop to get better performance
@@ -301,6 +329,11 @@ bool TensorImpl::compute_channels_last_contiguous_3d() const {
     default:
       return false;
   }
+}
+
+bool TensorImpl::compute_strides_like_channels_last_1d() const {
+  return is_channels_last_strides_1d(
+      TensorImpl::sizes(), TensorImpl::strides());
 }
 
 bool TensorImpl::compute_strides_like_channels_last_2d() const {
