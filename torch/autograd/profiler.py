@@ -205,9 +205,7 @@ class profile:
         self.enabled: bool = enabled
         if not self.enabled:
             return
-        self.use_device: Optional[str] = (
-            None if use_device == "privateuseone" else use_device
-        )
+        self.use_device: Optional[str] = use_device
         self.function_events: Optional[EventList] = None
         self.entered = False
         self.record_shapes = record_shapes
@@ -261,7 +259,7 @@ class profile:
             assert use_kineto and ProfilerActivity.XPU in _supported_activities(), \
                 "Legacy XPU profiling is not supported. Requires use_kineto=True on XPU devices."
             self.kineto_activities.add(ProfilerActivity.XPU)
-        elif self.use_device:
+        elif self.use_device != "privateuseone":
             if (
                 not use_kineto
                 or ProfilerActivity.PrivateUse1 not in _supported_activities()
