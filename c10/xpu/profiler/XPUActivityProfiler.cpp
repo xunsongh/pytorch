@@ -1,6 +1,9 @@
 #include "XPUActivityProfiler.h"
 #include "XPUActivityApi.h"
 
+#include <c10/core/DeviceType.h>
+#include <c10/core/kineto_plugin_api.h>
+
 #include <chrono>
 
 namespace c10::kineto_plugin::xpu {
@@ -130,5 +133,11 @@ XPUActivityProfiler::configure(
   AsyncProfileEndTime_ = ts_ms + duration_ms;
   return configure(activity_types, config);
 }
+
+// Global register kineto plugin once at first.
+auto XPUPluginRegister = []() -> std::unique_ptr<libkineto::IActivityProfiler> {
+	return std::make_unique<XPUActivityProfiler>();
+};
+REGISTER_KINETO_PLUGIN(kXPU, XPUPluginRegister);
 
 }

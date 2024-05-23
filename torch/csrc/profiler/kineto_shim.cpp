@@ -3,7 +3,7 @@
 
 #ifdef USE_KINETO
 #include <libkineto.h>
-#include <c10/kineto_plugin/register_api.h>
+#include <c10/core/kineto_plugin_api.h>
 #endif
 
 #include <c10/util/Exception.h>
